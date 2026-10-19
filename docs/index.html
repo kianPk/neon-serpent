@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Neon Serpent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0b1220;
+      --panel: #121a2b;
+      --ink: #e8eef8;
+      --muted: #8b9bb8;
+      --accent: #3dff9a;
+      --danger: #ff5d6c;
+      --font-display: "Orbitron", system-ui, sans-serif;
+      --font-body: "IBM Plex Sans", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      font-family: var(--font-body);
+      color: var(--ink);
+      background:
+        radial-gradient(900px 500px at 80% -10%, rgba(61, 255, 154, 0.12), transparent 55%),
+        radial-gradient(700px 400px at 0% 100%, rgba(70, 120, 255, 0.14), transparent 50%),
+        var(--bg);
+      display: grid;
+      place-items: center;
+      padding: 1rem;
+    }
+    .shell { width: min(100%, 520px); }
+    header {
+      display: flex; justify-content: space-between; align-items: end;
+      margin-bottom: 0.85rem; animation: rise 0.5s ease both;
+    }
+    h1 { font-family: var(--font-display); font-size: 1.35rem; letter-spacing: 0.06em; }
+    h1 span { color: var(--accent); }
+    .meta { font-size: 0.85rem; color: var(--muted); text-align: right; }
+    .meta strong { color: var(--accent); font-family: var(--font-display); }
+    .stage {
+      position: relative; background: var(--panel); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px; overflow: hidden; animation: rise 0.6s 0.05s ease both;
+    }
+    canvas { display: block; width: 100%; height: auto; touch-action: none; }
+    .overlay {
+      position: absolute; inset: 0; display: grid; place-items: center;
+      background: rgba(8, 12, 22, 0.78); backdrop-filter: blur(4px);
+      text-align: center; padding: 1.5rem;
+    }
+    .overlay.hidden { display: none; }
+    .overlay h2 { font-family: var(--font-display); font-size: 1.6rem; margin-bottom: 0.5rem; }
+    .overlay p { color: var(--muted); margin-bottom: 1.1rem; line-height: 1.5; }
+    button {
+      font-family: var(--font-display); letter-spacing: 0.04em; border: 0; cursor: pointer;
+      background: var(--accent); color: #04140c; font-weight: 800; padding: 0.75rem 1.25rem;
+      border-radius: 8px; transition: transform 0.15s;
+    }
+    button:hover { transform: translateY(-2px); }
+    .hud {
+      display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap; animation: rise 0.6s 0.1s ease both;
+    }
+    .chip {
+      flex: 1; min-width: 90px; background: var(--panel); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px; padding: 0.65rem 0.75rem; font-size: 0.8rem; color: var(--muted);
+    }
+    .chip b { display: block; color: var(--ink); font-family: var(--font-display); font-size: 1rem; margin-top: 0.15rem; }
+    .pad {
+      display: none; grid-template-columns: 64px 64px 64px; grid-template-rows: 64px 64px 64px;
+      gap: 0.4rem; justify-content: center; margin-top: 0.9rem;
+    }
+    .pad button { width: 64px; height: 64px; background: #1a2438; color: var(--ink); font-size: 1.1rem; }
+    .pad .u { grid-column: 2; grid-row: 1; }
+    .pad .l { grid-column: 1; grid-row: 2; }
+    .pad .d { grid-column: 2; grid-row: 2; }
+    .pad .r { grid-column: 3; grid-row: 2; }
+    @media (max-width: 640px) { .pad { display: grid; } }
+    footer { margin-top: 0.9rem; font-size: 0.75rem; color: var(--muted); display: flex; justify-content: space-between; }
+    a { color: var(--accent); }
+    @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div>
+        <h1>NEON <span>SERPENT</span></h1>
+      </div>
+      <div class="meta">
+        <div>Score <strong id="score">0</strong></div>
+        <div>Best <strong id="best">0</strong></div>
+      </div>
+    </header>
+    <div class="stage">
+      <canvas id="c" width="420" height="420"></canvas>
+      <div class="overlay" id="start">
+        <div>
+          <h2>Ready?</h2>
+          <p>Arrow keys / WASD / swipe.<br/>Eat orbs. Don't hit yourself. Speed climbs with score.</p>
+          <button id="btnStart">PLAY</button>
+        </div>
+      </div>
+      <div class="overlay hidden" id="over">
+        <div>
+          <h2>Game Over</h2>
+          <p>Score <strong id="final">0</strong></p>
+          <button id="btnAgain">AGAIN</button>
+        </div>
+      </div>
+    </div>
+    <div class="hud">
+      <div class="chip">Length <b id="len">3</b></div>
+      <div class="chip">Speed <b id="spd">1x</b></div>
+      <div class="chip">Orbs <b id="orbs">0</b></div>
+    </div>
+    <div class="pad">
+      <button class="u" data-d="0,-1">▲</button>
+      <button class="l" data-d="-1,0">◀</button>
+      <button class="d" data-d="0,1">▼</button>
+      <button class="r" data-d="1,0">▶</button>
+    </div>
+    <footer>
+      <span>Original game by Kian Zarandi</span>
+      <a href="https://github.com/kianPk/neon-serpent">GitHub</a>
+    </footer>
+  </div>
+  <script>
+    const COLS = 21, ROWS = 21, CELL = 20;
+    const canvas = document.getElementById("c");
+    const ctx = canvas.getContext("2d");
+    const BEST_KEY = "neon-serpent-best";
+
+    let snake, dir, nextDir, food, score, orbs, tickMs, acc, last, running, dead;
+    const $ = (id) => document.getElementById(id);
+
+    function reset() {
+      snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
+      dir = { x: 1, y: 0 }; nextDir = { ...dir };
+      score = 0; orbs = 0; tickMs = 130; acc = 0; dead = false; running = true;
+      placeFood(); updateHud();
+      $("start").classList.add("hidden");
+      $("over").classList.add("hidden");
+    }
+
+    function placeFood() {
+      do {
+        food = { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS), pulse: 0 };
+      } while (snake.some((s) => s.x === food.x && s.y === food.y));
+    }
+
+    function updateHud() {
+      $("score").textContent = score;
+      $("best").textContent = localStorage.getItem(BEST_KEY) || 0;
+      $("len").textContent = snake.length;
+      $("orbs").textContent = orbs;
+      $("spd").textContent = (130 / tickMs).toFixed(1) + "x";
+    }
+
+    function setDir(x, y) {
+      if (dir.x + x === 0 && dir.y + y === 0) return;
+      nextDir = { x, y };
+    }
+
+    function step() {
+      dir = nextDir;
+      const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+      if (head.x < 0 || head.y < 0 || head.x >= COLS || head.y >= ROWS ||
+          snake.some((s) => s.x === head.x && s.y === head.y)) {
+        dead = true; running = false;
+        const best = Number(localStorage.getItem(BEST_KEY) || 0);
+        if (score > best) localStorage.setItem(BEST_KEY, String(score));
+        $("final").textContent = score;
+        $("over").classList.remove("hidden");
+        updateHud();
+        return;
+      }
+      snake.unshift(head);
+      if (head.x === food.x && head.y === food.y) {
+        score += 10 + Math.floor(orbs / 3) * 2;
+        orbs++;
+        tickMs = Math.max(55, 130 - orbs * 3);
+        placeFood();
+      } else snake.pop();
+      updateHud();
+    }
+
+    function draw(t) {
+      ctx.fillStyle = "#0e1626";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = "rgba(255,255,255,0.03)";
+      for (let i = 0; i <= COLS; i++) {
+        ctx.beginPath(); ctx.moveTo(i * CELL, 0); ctx.lineTo(i * CELL, canvas.height); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, i * CELL); ctx.lineTo(canvas.width, i * CELL); ctx.stroke();
+      }
+      food.pulse += 0.08;
+      const glow = 6 + Math.sin(food.pulse) * 3;
+      ctx.shadowColor = "#3dff9a"; ctx.shadowBlur = glow;
+      ctx.fillStyle = "#3dff9a";
+      ctx.beginPath();
+      ctx.arc(food.x * CELL + CELL / 2, food.y * CELL + CELL / 2, CELL * 0.28, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      snake.forEach((s, i) => {
+        const a = 1 - i / (snake.length + 8);
+        ctx.fillStyle = `rgba(61,255,154,${0.35 + a * 0.65})`;
+        ctx.fillRect(s.x * CELL + 1.5, s.y * CELL + 1.5, CELL - 3, CELL - 3);
+      });
+      ctx.fillStyle = "#e8eef8";
+      ctx.fillRect(snake[0].x * CELL + 4, snake[0].y * CELL + 4, CELL - 8, CELL - 8);
+    }
+
+    function loop(ts) {
+      if (!last) last = ts;
+      const dt = ts - last; last = ts;
+      if (running) {
+        acc += dt;
+        while (acc >= tickMs) { acc -= tickMs; step(); if (!running) break; }
+      }
+      draw(ts);
+      requestAnimationFrame(loop);
+    }
+
+    window.addEventListener("keydown", (e) => {
+      const map = {
+        ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+        w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0]
+      };
+      const k = map[e.key] || map[e.key.toLowerCase()];
+      if (k) { e.preventDefault(); setDir(k[0], k[1]); }
+    });
+
+    let touchX, touchY;
+    canvas.addEventListener("touchstart", (e) => {
+      const t = e.changedTouches[0]; touchX = t.clientX; touchY = t.clientY;
+    }, { passive: true });
+    canvas.addEventListener("touchend", (e) => {
+      const t = e.changedTouches[0];
+      const dx = t.clientX - touchX, dy = t.clientY - touchY;
+      if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
+      if (Math.abs(dx) > Math.abs(dy)) setDir(dx > 0 ? 1 : -1, 0);
+      else setDir(0, dy > 0 ? 1 : -1);
+    }, { passive: true });
+
+    document.querySelectorAll(".pad button").forEach((b) => {
+      b.addEventListener("click", () => {
+        const [x, y] = b.dataset.d.split(",").map(Number);
+        setDir(x, y);
+      });
+    });
+
+    $("btnStart").onclick = reset;
+    $("btnAgain").onclick = reset;
+    $("best").textContent = localStorage.getItem(BEST_KEY) || 0;
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
