@@ -59,6 +59,10 @@
       border-radius: 8px; transition: transform 0.15s;
     }
     button:hover { transform: translateY(-2px); }
+    button.ghost {
+      background: transparent; color: var(--ink); border: 1px solid rgba(255,255,255,0.2);
+      margin-left: 0.5rem;
+    }
     .hud {
       display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap; animation: rise 0.6s 0.1s ease both;
     }
@@ -67,6 +71,10 @@
       border-radius: 10px; padding: 0.65rem 0.75rem; font-size: 0.8rem; color: var(--muted);
     }
     .chip b { display: block; color: var(--ink); font-family: var(--font-display); font-size: 1rem; margin-top: 0.15rem; }
+    .chip button.toggle {
+      display: block; width: 100%; margin-top: 0.35rem; padding: 0.4rem; font-size: 0.7rem;
+      background: #1a2438; color: var(--accent);
+    }
     .pad {
       display: none; grid-template-columns: 64px 64px 64px; grid-template-rows: 64px 64px 64px;
       gap: 0.4rem; justify-content: center; margin-top: 0.9rem;
@@ -98,7 +106,7 @@
       <div class="overlay" id="start">
         <div>
           <h2>Ready?</h2>
-          <p>Arrow keys / WASD / swipe.<br/>Eat orbs. Don't hit yourself. Speed climbs with score.</p>
+          <p>Arrow keys / WASD / swipe.<br/>Eat orbs. Speed rises every 5 food.<br/>Toggle wrap vs solid walls below.</p>
           <button id="btnStart">PLAY</button>
         </div>
       </div>
@@ -114,6 +122,9 @@
       <div class="chip">Length <b id="len">3</b></div>
       <div class="chip">Speed <b id="spd">1x</b></div>
       <div class="chip">Orbs <b id="orbs">0</b></div>
+      <div class="chip">Walls
+        <button class="toggle" id="wallToggle" type="button">Solid</button>
+      </div>
     </div>
     <div class="pad">
       <button class="u" data-d="0,-1">▲</button>
@@ -128,17 +139,25 @@
   </div>
   <script>
     const COLS = 21, ROWS = 21, CELL = 20;
+    const BASE_MS = 130, MIN_MS = 50, SPEED_EVERY = 5, SPEED_STEP = 12;
     const canvas = document.getElementById("c");
     const ctx = canvas.getContext("2d");
     const BEST_KEY = "neon-serpent-best";
+    const WRAP_KEY = "neon-serpent-wrap";
 
-    let snake, dir, nextDir, food, score, orbs, tickMs, acc, last, running, dead;
+    let snake, dir, nextDir, food, score, orbs, tickMs, acc, last, running, dead, wrapWalls;
     const $ = (id) => document.getElementById(id);
+
+    wrapWalls = localStorage.getItem(WRAP_KEY) === "1";
+
+    function syncWallBtn() {
+      $("wallToggle").textContent = wrapWalls ? "Wrap" : "Solid";
+    }
 
     function reset() {
       snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
       dir = { x: 1, y: 0 }; nextDir = { ...dir };
-      score = 0; orbs = 0; tickMs = 130; acc = 0; dead = false; running = true;
+      score = 0; orbs = 0; tickMs = BASE_MS; acc = 0; dead = false; running = true;
       placeFood(); updateHud();
       $("start").classList.add("hidden");
       $("over").classList.add("hidden");
@@ -153,9 +172,10 @@
     function updateHud() {
       $("score").textContent = score;
       $("best").textContent = localStorage.getItem(BEST_KEY) || 0;
-      $("len").textContent = snake.length;
-      $("orbs").textContent = orbs;
-      $("spd").textContent = (130 / tickMs).toFixed(1) + "x";
+      $("len").textContent = snake ? snake.length : 3;
+      $("orbs").textContent = orbs || 0;
+      $("spd").textContent = (BASE_MS / tickMs).toFixed(1) + "x";
+      syncWallBtn();
     }
 
     function setDir(x, y) {
@@ -165,35 +185,52 @@
 
     function step() {
       dir = nextDir;
-      const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
-      if (head.x < 0 || head.y < 0 || head.x >= COLS || head.y >= ROWS ||
-          snake.some((s) => s.x === head.x && s.y === head.y)) {
-        dead = true; running = false;
-        const best = Number(localStorage.getItem(BEST_KEY) || 0);
-        if (score > best) localStorage.setItem(BEST_KEY, String(score));
-        $("final").textContent = score;
-        $("over").classList.remove("hidden");
-        updateHud();
-        return;
+      let head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+
+      if (wrapWalls) {
+        head.x = (head.x + COLS) % COLS;
+        head.y = (head.y + ROWS) % ROWS;
+      } else if (head.x < 0 || head.y < 0 || head.x >= COLS || head.y >= ROWS) {
+        return die();
       }
+
+      if (snake.some((s) => s.x === head.x && s.y === head.y)) return die();
+
       snake.unshift(head);
       if (head.x === food.x && head.y === food.y) {
         score += 10 + Math.floor(orbs / 3) * 2;
         orbs++;
-        tickMs = Math.max(55, 130 - orbs * 3);
+        // Speed increases every N food
+        const tiers = Math.floor(orbs / SPEED_EVERY);
+        tickMs = Math.max(MIN_MS, BASE_MS - tiers * SPEED_STEP);
         placeFood();
       } else snake.pop();
+      updateHud();
+    }
+
+    function die() {
+      dead = true; running = false;
+      const best = Number(localStorage.getItem(BEST_KEY) || 0);
+      if (score > best) localStorage.setItem(BEST_KEY, String(score));
+      $("final").textContent = score;
+      $("over").classList.remove("hidden");
       updateHud();
     }
 
     function draw(t) {
       ctx.fillStyle = "#0e1626";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Wall mode indicator border
+      ctx.strokeStyle = wrapWalls ? "rgba(61,255,154,0.35)" : "rgba(255,93,108,0.45)";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(1.5, 1.5, canvas.width - 3, canvas.height - 3);
       ctx.strokeStyle = "rgba(255,255,255,0.03)";
+      ctx.lineWidth = 1;
       for (let i = 0; i <= COLS; i++) {
         ctx.beginPath(); ctx.moveTo(i * CELL, 0); ctx.lineTo(i * CELL, canvas.height); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(0, i * CELL); ctx.lineTo(canvas.width, i * CELL); ctx.stroke();
       }
+      if (!food) return;
       food.pulse += 0.08;
       const glow = 6 + Math.sin(food.pulse) * 3;
       ctx.shadowColor = "#3dff9a"; ctx.shadowBlur = glow;
@@ -202,6 +239,7 @@
       ctx.arc(food.x * CELL + CELL / 2, food.y * CELL + CELL / 2, CELL * 0.28, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
+      if (!snake) return;
       snake.forEach((s, i) => {
         const a = 1 - i / (snake.length + 8);
         ctx.fillStyle = `rgba(61,255,154,${0.35 + a * 0.65})`;
@@ -250,9 +288,16 @@
       });
     });
 
+    $("wallToggle").onclick = () => {
+      wrapWalls = !wrapWalls;
+      localStorage.setItem(WRAP_KEY, wrapWalls ? "1" : "0");
+      syncWallBtn();
+    };
+
     $("btnStart").onclick = reset;
     $("btnAgain").onclick = reset;
     $("best").textContent = localStorage.getItem(BEST_KEY) || 0;
+    syncWallBtn();
     requestAnimationFrame(loop);
   </script>
 </body>
